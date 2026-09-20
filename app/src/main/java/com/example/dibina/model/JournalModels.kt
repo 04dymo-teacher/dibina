@@ -117,6 +117,7 @@ data class JournalEntry(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val feedPostId: String? = null,
+    val sharedToFeed: Boolean = false,
     val spreadsheetSyncStatus: String = "PENDING", // PENDING, SYNCED, ERROR
     val spreadsheetSyncedAt: Long? = null,
     val spreadsheetSyncError: String? = null
@@ -199,21 +200,26 @@ data class DailyStat(
 /**
  * Feed Post Model according to exact Firestore schema:
  * Collection: feedPosts/{postId}
+ * Stored fields:
+ * - journalId, uid, classId, name, profilePhotoUrl, date, sharedActivity, createdAt, updatedAt
+ * Do not expose in UI: email, NIS, UID
  */
 data class FeedPost(
     val postId: String = "",
     val journalId: String = "",
     val uid: String = "",
     val classId: String = "",
-    val studentName: String = "",
+    val name: String = "",
     val profilePhotoUrl: String? = null,
     val date: String = "",
-    val summary: String = "",
-    val materiBelajar: String? = null,
-    val cheerCount: Int = 0,
-    val createdAt: Long = System.currentTimeMillis()
+    val sharedActivity: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 ) {
+    // UI Helpers maintaining backward compatibility and rich display
+    val studentName: String get() = name.ifBlank { "Siswa DIBINA" }
     val studentPhotoUrl: String? get() = profilePhotoUrl
+    val summary: String get() = sharedActivity
     val completedCount: Int get() = 7
 }
 

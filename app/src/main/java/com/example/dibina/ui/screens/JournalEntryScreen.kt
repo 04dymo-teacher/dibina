@@ -33,10 +33,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Feed
 import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.WbSunny
@@ -62,6 +64,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -111,7 +115,8 @@ fun JournalEntryScreen(
     studentProfile: StudentProfile,
     initialJournal: JournalEntry?,
     onFetchJournalForDate: suspend (String) -> JournalEntry?,
-    onSaveJournal: suspend (JournalEntry) -> Result<Unit>,
+    onSaveJournal: suspend (JournalEntry, Boolean) -> Result<Unit>,
+    onShareToFeed: suspend (JournalEntry) -> Result<Unit> = { Result.success(Unit) },
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -127,6 +132,12 @@ fun JournalEntryScreen(
     var isCheckingDate by remember { mutableStateOf(false) }
 
     val isEditMode = currentJournal != null
+
+    // Feed Sharing State
+    var shareToFeedOption by remember { mutableStateOf(true) }
+    var feedAlreadyShared by remember { mutableStateOf(initialJournal?.sharedToFeed == true || initialJournal?.feedPostId != null) }
+    var isSharingToFeed by remember { mutableStateOf(false) }
+    var lastSavedEntry by remember { mutableStateOf<JournalEntry?>(null) }
 
     // 1. Bangun Pagi (Time Picker)
     var bangunPagiTime by remember { mutableStateOf(initialJournal?.bangunPagiTime ?: "") }
@@ -166,6 +177,7 @@ fun JournalEntryScreen(
     // Initialize prayer checklist if editing
     LaunchedEffect(currentJournal) {
         currentJournal?.let { j ->
+            feedAlreadyShared = j.sharedToFeed || (j.feedPostId != null)
             bangunPagiTime = j.bangunPagiTime
             selectedPrayers.clear()
             selectedPrayers.addAll(j.ibadahSholat)
@@ -193,6 +205,8 @@ fun JournalEntryScreen(
             currentJournal = fetched
             if (fetched == null) {
                 // Reset to fresh form
+                feedAlreadyShared = false
+                shareToFeedOption = true
                 bangunPagiTime = ""
                 selectedPrayers.clear()
                 nonMuslimDevotionText = ""
@@ -913,7 +927,63 @@ fun JournalEntryScreen(
             // SUBMIT BUTTON (Save / Update Flow)
             // ==========================================
             item {
-                Spacer(modifier = Modifier.height(8.dp))
+                // 8. Bagikan ke Kabar Teman Toggle Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .testTag("share_to_feed_toggle_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(CardBorderColor))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Feed,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Bagikan ke Kabar Teman",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkTextColor
+                            )
+                            Text(
+                                text = if (isEditMode && feedAlreadyShared) "Akan memperbarui postingan kabar teman kelasmu."
+                                       else "Bagikan aktivitas positifmu agar teman sekelas terinspirasi.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedTextColor
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = shareToFeedOption,
+                            onCheckedChange = { shareToFeedOption = it },
+                            modifier = Modifier.testTag("share_to_feed_switch"),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
                 Button(
                     onClick = {
                         // Validate date range
@@ -979,17 +1049,27 @@ fun JournalEntryScreen(
                                 tidurCepatTime = tidurCepatTime,
                                 exp = potentialExp,
                                 isBackdate = (dateCheck as DateValidationResult.Valid).isBackdate,
+                                sharedToFeed = shareToFeedOption || feedAlreadyShared,
                                 createdAt = currentJournal?.createdAt ?: System.currentTimeMillis(),
                                 updatedAt = System.currentTimeMillis()
                             )
 
-                            val result = onSaveJournal(entry)
+                            lastSavedEntry = entry
+                            val result = onSaveJournal(entry, shareToFeedOption)
                             isSaving = false
                             result.onSuccess {
                                 successDialogMessage = if (isEditMode) {
-                                    "Jurnal tanggal ${JournalIdHelper.formatShortDate(selectedDateString)} berhasil diperbarui!"
+                                    if (feedAlreadyShared || shareToFeedOption) {
+                                        "Jurnal tanggal ${JournalIdHelper.formatShortDate(selectedDateString)} dan Kabar Teman berhasil diperbarui!"
+                                    } else {
+                                        "Jurnal tanggal ${JournalIdHelper.formatShortDate(selectedDateString)} berhasil diperbarui!"
+                                    }
                                 } else {
-                                    "Hebat! Jurnal berhasil disimpan. Kamu mendapatkan +$potentialExp EXP!"
+                                    if (shareToFeedOption) {
+                                        "Hebat! Jurnal berhasil disimpan dan dibagikan ke Kabar Teman kelasmu (+${potentialExp} EXP)."
+                                    } else {
+                                        "Hebat! Jurnal berhasil disimpan. Kamu mendapatkan +${potentialExp} EXP!"
+                                    }
                                 }
                                 showSuccessDialog = true
                             }.onFailure { err ->
@@ -1030,8 +1110,11 @@ fun JournalEntryScreen(
         }
     }
 
-    // SUCCESS DIALOG
+    // SUCCESS DIALOG WITH EXPLICIT "BAGIKAN KE KABAR TEMAN" FLOW
     if (showSuccessDialog) {
+        val entry = lastSavedEntry
+        val isAlreadyShared = feedAlreadyShared || shareToFeedOption
+
         AlertDialog(
             onDismissRequest = {
                 showSuccessDialog = false
@@ -1054,21 +1137,75 @@ fun JournalEntryScreen(
                 }
             },
             text = {
-                Text(
-                    text = successDialogMessage,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = DarkTextColor
-                )
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = successDialogMessage,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DarkTextColor
+                    )
+                    if (!isAlreadyShared && entry != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Bagikan aktivitas positifmu ke Kabar Teman agar teman sekelas terinspirasi!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedTextColor
+                        )
+                    }
+                }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showSuccessDialog = false
-                        onNavigateBack()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
-                ) {
-                    Text("Kembali ke Beranda", color = Color.White, fontWeight = FontWeight.Bold)
+                if (!isAlreadyShared && entry != null) {
+                    Button(
+                        onClick = {
+                            isSharingToFeed = true
+                            coroutineScope.launch {
+                                val shareResult = onShareToFeed(entry)
+                                isSharingToFeed = false
+                                shareResult.onSuccess {
+                                    feedAlreadyShared = true
+                                    showSuccessDialog = false
+                                    onNavigateBack()
+                                }.onFailure { err ->
+                                    snackbarHostState.showSnackbar(err.localizedMessage ?: "Gagal membagikan ke kabar teman.")
+                                }
+                            }
+                        },
+                        enabled = !isSharingToFeed,
+                        modifier = Modifier.testTag("dialog_share_to_feed_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        if (isSharingToFeed) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
+                        } else {
+                            Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Bagikan ke Kabar Teman", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            showSuccessDialog = false
+                            onNavigateBack()
+                        },
+                        modifier = Modifier.testTag("dialog_done_button"),
+                        colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                    ) {
+                        Text("Kembali ke Beranda", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isAlreadyShared && entry != null) {
+                    TextButton(
+                        onClick = {
+                            showSuccessDialog = false
+                            onNavigateBack()
+                        },
+                        modifier = Modifier.testTag("dialog_skip_button")
+                    ) {
+                        Text("Nanti Saja", color = MutedTextColor)
+                    }
                 }
             }
         )

@@ -95,14 +95,16 @@ class JournalRepository(
      * Rules enforced:
      * - Date validation: Today or up to 7 days in the past only. Future dates rejected.
      * - Deterministic ID: uid_YYYYMMDD.
-     * - If editing: updates existing document, does not duplicate EXP (only awards diff if higher),
-     *   does not create new feed post (updates existing feed post).
-     * - If creating: inserts new document, records EXP and streak.
+     * - If editing: updates existing document, does not duplicate EXP (only awards diff if higher).
+     * - If feed post already exists for this journal, updates existing feed post; never creates another feed post.
+     * - If shareToFeed is selected, creates exactly one feed post.
+     * - Stored feed fields: journalId, uid, classId, name, profilePhotoUrl, date, sharedActivity, createdAt, updatedAt.
      */
     suspend fun saveOrUpdateJournal(
         entry: JournalEntry,
         studentName: String = "",
-        profilePhotoUrl: String? = null
+        profilePhotoUrl: String? = null,
+        shareToFeed: Boolean = false
     ): Result<Unit> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firebase Firestore tidak terhubung."))
 
@@ -131,13 +133,18 @@ class JournalRepository(
             db.runTransaction { transaction ->
                 val existingJournalDoc = transaction.get(journalDocRef)
                 val isEditMode = existingJournalDoc.exists()
+                val existingFeedDoc = transaction.get(feedPostDocRef)
+                val feedAlreadyExists = existingFeedDoc.exists()
+                val shouldUpdateOrPostFeed = shareToFeed || entry.sharedToFeed || feedAlreadyExists
+
                 val now = System.currentTimeMillis()
 
                 val finalJournal = entry.copy(
                     journalId = deterministicId,
                     exp = estimatedExp, // Initial placeholder, final authoritative EXP is calculated server-side
                     isBackdate = isBackdate,
-                    feedPostId = deterministicId,
+                    feedPostId = if (shouldUpdateOrPostFeed) deterministicId else existingJournalDoc.getString("feedPostId"),
+                    sharedToFeed = shouldUpdateOrPostFeed,
                     spreadsheetSyncStatus = "PENDING",
                     createdAt = if (isEditMode) (existingJournalDoc.getLong("createdAt") ?: now) else now,
                     updatedAt = now
@@ -156,25 +163,30 @@ class JournalRepository(
                     updatedAt = now
                 )
 
-                val feedPost = FeedPost(
-                    postId = deterministicId,
-                    journalId = deterministicId,
-                    uid = entry.uid,
-                    classId = entry.classId,
-                    studentName = if (studentName.isNotBlank()) studentName else "Siswa DIBINA",
-                    profilePhotoUrl = profilePhotoUrl,
-                    date = entry.date,
-                    summary = "Menyelesaikan $completedHabitsCount dari 7 Kebiasaan Anak Indonesia Hebat.",
-                    materiBelajar = entry.materiBelajar.ifBlank { null },
-                    cheerCount = if (isEditMode) (transaction.get(feedPostDocRef).getLong("cheerCount")?.toInt() ?: 0) else 0,
-                    createdAt = finalJournal.createdAt
-                )
-
-                // Write Journal, DailyStat, and FeedPost
-                // Cloud Function `onJournalWritten` will authoritatively calculate final EXP, level, streak, and badges
+                // Write Journal & DailyStat
                 transaction.set(journalDocRef, finalJournal, SetOptions.merge())
                 transaction.set(dailyStatDocRef, dailyStat, SetOptions.merge())
-                transaction.set(feedPostDocRef, feedPost, SetOptions.merge())
+
+                // Feed Post Management:
+                // If feed already exists -> UPDATE existing feed post.
+                // If user selected "Bagikan ke Kabar Teman" -> CREATE exactly one feed post.
+                // Each journal has maximum one feed post with ID == deterministicId.
+                if (shouldUpdateOrPostFeed) {
+                    val sharedActivitySummary = JournalIdHelper.formatSharedActivity(entry)
+                    val feedPost = FeedPost(
+                        postId = deterministicId,
+                        journalId = deterministicId,
+                        uid = entry.uid,
+                        classId = entry.classId,
+                        name = if (studentName.isNotBlank()) studentName else "Siswa DIBINA",
+                        profilePhotoUrl = profilePhotoUrl,
+                        date = entry.date,
+                        sharedActivity = sharedActivitySummary,
+                        createdAt = if (feedAlreadyExists) (existingFeedDoc.getLong("createdAt") ?: now) else now,
+                        updatedAt = now
+                    )
+                    transaction.set(feedPostDocRef, feedPost, SetOptions.merge())
+                }
 
                 // Touch user document updatedAt
                 val userDoc = transaction.get(userDocRef)
@@ -184,6 +196,56 @@ class JournalRepository(
                     ))
                 }
             }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Explicit "Bagikan ke Kabar Teman" flow after journal submission.
+     * Ensures exactly one feed post per journal.
+     * If post already exists, updates it.
+     */
+    suspend fun shareJournalToFeed(
+        entry: JournalEntry,
+        studentName: String,
+        profilePhotoUrl: String?
+    ): Result<Unit> {
+        val db = firestore ?: return Result.failure(IllegalStateException("Firebase Firestore tidak terhubung."))
+        val deterministicId = JournalIdHelper.generateJournalId(entry.uid, entry.date)
+        val feedPostDocRef = db.collection("feedPosts").document(deterministicId)
+        val journalDocRef = db.collection("journals").document(deterministicId)
+
+        return try {
+            val now = System.currentTimeMillis()
+            val sharedActivity = JournalIdHelper.formatSharedActivity(entry)
+
+            val existingDoc = feedPostDocRef.get().await()
+            val createdAt = if (existingDoc.exists()) (existingDoc.getLong("createdAt") ?: now) else now
+
+            val feedPost = FeedPost(
+                postId = deterministicId,
+                journalId = deterministicId,
+                uid = entry.uid,
+                classId = entry.classId,
+                name = if (studentName.isNotBlank()) studentName else "Siswa DIBINA",
+                profilePhotoUrl = profilePhotoUrl,
+                date = entry.date,
+                sharedActivity = sharedActivity,
+                createdAt = createdAt,
+                updatedAt = now
+            )
+
+            feedPostDocRef.set(feedPost, SetOptions.merge()).await()
+            journalDocRef.update(
+                mapOf<String, Any>(
+                    "sharedToFeed" to true,
+                    "feedPostId" to deterministicId,
+                    "updatedAt" to now
+                )
+            ).await()
 
             Result.success(Unit)
         } catch (e: Exception) {

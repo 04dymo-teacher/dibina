@@ -38,12 +38,19 @@
     <string name="habit_7_desc">Tidur malam tepat waktu sebelum pukul 21.30 untuk menjaga kesehatan tubuh.</string>
 
     <!-- Empty States -->
-    <string name="empty_feed_title">Belum Ada Kabar Teman</string>
-    <string name="empty_feed_desc">Belum ada aktivitas jurnal dari teman sekelas. Jadilah yang pertama mengisi jurnal hari ini!</string>
-    <string name="empty_leaderboard_title">Papan Peringkat Kelas</string>
-    <string name="empty_leaderboard_desc">Peringkat kelas akan muncul setelah teman-teman mengisi jurnal kebiasaan hari ini.</string>
+    <string name="kabar_teman_title">Kabar Teman</string>
+    <string name="empty_feed_title">Belum ada kabar teman.</string>
+    <string name="empty_feed_desc">Kabar teman akan muncul setelah aktivitas kelas mulai dibagikan.</string>
+    <string name="empty_leaderboard_title">Peringkat Kelas</string>
+    <string name="empty_leaderboard_desc">Leaderboard akan muncul setelah aktivitas kelas mulai berjalan.</string>
     <string name="empty_recap_title">Belum Ada Riwayat Jurnal</string>
     <string name="empty_recap_desc">Catat kebiasaan pertamamu hari ini untuk melihat grafik perkembangan dan streak-mu.</string>
+
+    <!-- Social and Feed Actions -->
+    <string name="btn_share_to_feed">Bagikan ke Kabar Teman</string>
+    <string name="share_to_feed_desc">Bagikan aktivitas positifmu agar teman sekelas terinspirasi.</string>
+    <string name="feed_shared_success">Berhasil dibagikan ke Kabar Teman!</string>
+    <string name="feed_updated_success">Kabar Teman berhasil diperbarui!</string>
 
     <!-- Actions and General -->
     <string name="btn_save_journal">Simpan Jurnal</string>

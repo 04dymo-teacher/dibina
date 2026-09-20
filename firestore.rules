@@ -22,11 +22,21 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.role == 'admin';
     }
 
+    function getUserClassId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId;
+    }
+
     // 1. USERS (/users/{uid})
     // Client MUST NOT directly modify:
     // role, classId, totalExp, level, currentStreak, longestStreak, createdAt, updatedAt
+    // Read is restricted to own document, same class members, teacher, or admin (preventing cross-class leakage)
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        isOwner(userId) ||
+        resource.data.classId == getUserClassId() ||
+        isTeacher() ||
+        isAdmin()
+      );
 
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
@@ -75,10 +85,18 @@ service cloud.firestore {
     }
 
     // 5. FEED POSTS (/feedPosts/{postId})
+    // Feed is restricted by classId: Students can only see posts from their own class.
     match /feedPosts/{postId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated()
-        && request.resource.data.uid == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        resource.data.classId == getUserClassId() || isTeacher() || isAdmin()
+      );
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.classId == getUserClassId();
+      allow update: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.classId == resource.data.classId;
       allow delete: if isOwner(resource.data.uid) || isTeacher() || isAdmin();
     }
 

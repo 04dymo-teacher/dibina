@@ -116,6 +116,56 @@ object JournalIdHelper {
             else -> DateValidationResult.Valid(isBackdate = diffDays > 0)
         }
     }
+
+    /**
+     * Formats shared habits highlights for Kabar Teman feed.
+     * Generates a clear, inspiring summary of positive habits done.
+     */
+    fun formatSharedActivity(entry: com.example.dibina.model.JournalEntry): String {
+        val habits = mutableListOf<String>()
+        if (entry.bangunPagi || entry.bangunPagiTime.isNotBlank()) {
+            val time = if (entry.bangunPagiTime.isNotBlank()) " (${entry.bangunPagiTime})" else ""
+            habits.add("Bangun Pagi$time")
+        }
+        if (entry.ibadah || entry.ibadahSholat.isNotEmpty() || entry.ibadahDetails.isNotBlank()) {
+            val count = entry.ibadahSholat.size
+            val info = if (count > 0) " ($count Waktu)" else ""
+            habits.add("Beribadah$info")
+        }
+        if (entry.olahraga || entry.olahragaActivity.isNotBlank()) {
+            val act = if (entry.olahragaActivity.isNotBlank()) " (${entry.olahragaActivity})" else ""
+            habits.add("Berolahraga$act")
+        }
+        val nutritionFilled = listOf(
+            entry.karbohidrat || entry.karbohidratText.isNotBlank(),
+            entry.protein || entry.proteinText.isNotBlank(),
+            entry.lemak || entry.lemakText.isNotBlank(),
+            entry.vitamin || entry.vitaminText.isNotBlank(),
+            entry.serat || entry.seratText.isNotBlank(),
+            entry.air || entry.airGelas >= 1
+        ).count { it }
+        if (nutritionFilled >= 3) {
+            val water = if (entry.airGelas > 0) "${entry.airGelas} gelas air" else "Gizi Seimbang"
+            habits.add("Makan Sehat ($water)")
+        }
+        if (entry.materiBelajar.isNotBlank() && entry.durasiBelajar >= 15) {
+            habits.add("Gemar Belajar ${entry.materiBelajar} (${entry.durasiBelajar} mnt)")
+        }
+        if (entry.bermasyarakat || entry.bermasyarakatActivity.isNotBlank()) {
+            val act = if (entry.bermasyarakatActivity.isNotBlank()) " (${entry.bermasyarakatActivity})" else ""
+            habits.add("Bermasyarakat$act")
+        }
+        if (entry.tidurCepat || entry.tidurCepatTime.isNotBlank()) {
+            val time = if (entry.tidurCepatTime.isNotBlank()) " (${entry.tidurCepatTime})" else ""
+            habits.add("Tidur Cepat$time")
+        }
+
+        return if (habits.isNotEmpty()) {
+            "Menjalankan ${habits.size} kebiasaan hebat: ${habits.joinToString(" • ")}"
+        } else {
+            "Telah mengisi jurnal 7 Kebiasaan Anak Indonesia Hebat hari ini."
+        }
+    }
 }
 
 data class SelectableDate(

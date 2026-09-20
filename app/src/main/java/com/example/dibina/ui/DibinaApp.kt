@@ -128,8 +128,16 @@ fun DibinaApp(
                         onFetchJournalForDate = { dateStr ->
                             journalRepository.getJournalForDate(effectiveProfile.uid, dateStr)
                         },
-                        onSaveJournal = { entry ->
+                        onSaveJournal = { entry, shareToFeed ->
                             journalRepository.saveOrUpdateJournal(
+                                entry = entry,
+                                studentName = effectiveProfile.name,
+                                profilePhotoUrl = effectiveProfile.profilePhotoUrl,
+                                shareToFeed = shareToFeed
+                            )
+                        },
+                        onShareToFeed = { entry ->
+                            journalRepository.shareJournalToFeed(
                                 entry = entry,
                                 studentName = effectiveProfile.name,
                                 profilePhotoUrl = effectiveProfile.profilePhotoUrl
