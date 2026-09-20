@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Profile photo storage: users/{uid}/profile/
+    // Supported formats: JPEG, PNG, WEBP
+    // Size limit: 5MB
+    // Student may only modify their own profile image.
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Optional journal documentation photos: users/{uid}/journals/{fileName}
+    match /users/{userId}/journals/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+  }
+}

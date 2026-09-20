@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- Circular Background Container -->
+    <path
+        android:fillColor="#E1F5FE"
+        android:pathData="M48,0 C74.5,0 96,21.5 96,48 C96,74.5 74.5,96 48,96 C21.5,96 0,74.5 0,48 C0,21.5 21.5,0 48,0 Z" />
+    <!-- Neutral Unisex Head Silhouette -->
+    <path
+        android:fillColor="#0288D1"
+        android:pathData="M48,22 C55.7,22 62,28.3 62,36 C62,43.7 55.7,50 48,50 C40.3,50 34,43.7 34,36 C34,28.3 40.3,22 48,22 Z" />
+    <!-- Neutral Unisex Shoulders & Bust Silhouette -->
+    <path
+        android:fillColor="#0288D1"
+        android:pathData="M48,56 C61.3,56 74,62.8 74,74 L74,80 C74,82.2 72.2,84 70,84 L26,84 C23.8,84 22,82.2 22,80 L22,74 C22,62.8 34.7,56 48,56 Z" />
+</vector>

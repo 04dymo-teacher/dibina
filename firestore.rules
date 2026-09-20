@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'teacher' ||
+        exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+
+    // 1. USERS (/users/{uid})
+    // Client MUST NOT directly modify:
+    // role, classId, totalExp, level, currentStreak, longestStreak, createdAt, updatedAt
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.role == 'student'
+        && request.resource.data.totalExp == 0
+        && request.resource.data.level == 1
+        && request.resource.data.currentStreak == 0
+        && request.resource.data.longestStreak == 0;
+
+      allow update: if isOwner(userId) && (
+        // Enforce that client does NOT modify protected fields
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'role', 'classId', 'totalExp', 'level', 'currentStreak', 'longestStreak', 'createdAt'
+        ])
+      ) || isAdmin() || isTeacher();
+
+      allow delete: if isAdmin();
+    }
+
+    // 2. CLASSES (/classes/{classId})
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher() || isAdmin();
+
+      // 3. CLASS MEMBERS (/classes/{classId}/members/{uid})
+      match /members/{memberUid} {
+        allow read: if isAuthenticated();
+        allow create: if isOwner(memberUid) || isTeacher() || isAdmin();
+        allow update, delete: if isTeacher() || isAdmin();
+      }
+    }
+
+    // 4. JOURNALS (/journals/{journalId})
+    // Deterministic ID: uid_YYYYMMDD (e.g. abc123_20260920)
+    // Rule: ONE STUDENT + ONE DATE = EXACTLY ONE JOURNAL.
+    // CRITICAL: Strictly NO mineral field!
+    match /journals/{journalId} {
+      allow read: if isAuthenticated();
+
+      allow create, update: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && journalId == (request.auth.uid + "_" + request.resource.data.date)
+        && !('mineral' in request.resource.data);
+
+      allow delete: if isAdmin();
+    }
+
+    // 5. FEED POSTS (/feedPosts/{postId})
+    match /feedPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(resource.data.uid) || isTeacher() || isAdmin();
+    }
+
+    // 6. DAILY STATS (/dailyStats/{statId})
+    // Deterministic ID: uid_YYYYMMDD
+    // One student + one date = one dailyStats document.
+    match /dailyStats/{statId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && statId == (request.auth.uid + "_" + request.resource.data.date)
+        && !('mineral' in request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // 7. ACHIEVEMENTS (/achievements/{uid})
+    match /achievements/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isTeacher() || isAdmin();
+    }
+
+    // 8. BADGES (/badges/{badgeId})
+    match /badges/{badgeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 9. NOTIFICATIONS (/notifications/{notificationId})
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.targetUid == request.auth.uid;
+      // Students can only mark notifications as read
+      allow update: if isAuthenticated()
+        && resource.data.targetUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+      allow create, delete: if isTeacher() || isAdmin();
+    }
+
+    // 10. TEACHERS (/teachers/{uid})
+    match /teachers/{teacherUid} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 11. AUDIT LOGS (/auditLogs/{logId})
+    match /auditLogs/{logId} {
+      allow read: if isTeacher() || isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false; // Append-only immutable log
+    }
+
+    // 12. APP CONFIG (/appConfig/{configId})
+    match /appConfig/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

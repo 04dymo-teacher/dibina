@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Top fanning page 1 (highest) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,30 L66,15 L66,23 L42,34 Z" />
+    <!-- Top fanning page 2 (middle) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M35,36 L72,25 L72,33 L40,40 Z" />
+    <!-- Top fanning page 3 (lowest above D) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,42 L77,38 L77,47 L38,47 Z" />
+    <!-- Main "D" Body with Book Spine and Inner Counter -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,36 C30,36 34,36 36,44 L36,82 C36,88 41,92 48,92 L58,92 C72,92 82,82 82,65 C82,51 72,44 58,44 L43,44 L37,42 C32,40 30,36 30,36 Z M48,56 L56,56 C63,56 67,60 67,66 C67,73 63,78 56,78 L48,78 Z" />
+</vector>
